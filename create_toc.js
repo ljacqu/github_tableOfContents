@@ -5,9 +5,10 @@
     'use strict';
 
     /** @var {string[]} the elements that define titles. */
-    var headerTags = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
+    var HEADER_TAGS = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
 
-    var listType = {
+    /** @var {Object} object of callbacks for different bullet types. */
+    var LIST_TYPE = {
         unordered: function () { return '-'; },
         ordered: function () { return '1.'; },
         firstLevelNumbered: function (entry) { return entry.indentation === 0 ? '1.' : '-'; }
@@ -45,10 +46,10 @@
     /** Creates Entry objects for the table of contents. */
     var extractor = (function () {
         /**
-         * Processes the given header element and returns the corresponding Markdown for the table of contents.
+         * Generates an Entry object for the given header tag.
          *
          * @param {HTMLElement} tag the element to process
-         * @returns {?Entry} markdown entry for the tag or null if not applicable
+         * @returns {?Entry} entry for the tag or null if not applicable
          */
         var processHeader = function (tag) {
             var anchor = firstOrNull(tag.getElementsByTagName('a'));
@@ -91,16 +92,16 @@
         };
 
         /**
-         * Generates the list of contents based on the children of the given parent tag.
+         * Generates a list of Entry objects representing the headers inside of the given parent.
          *
          * @param {HTMLElement} parent the parent element of the markdown document
-         * @returns {Entry[]} list with all lines of the table of contents
+         * @returns {Entry[]} list of title entries of the markdown document
          */
-        var generateList = function (parent) {
+        var generateEntries = function (parent) {
             var listElements = [];
             for (var i = 0; i < parent.children.length; ++i) {
                 var child = parent.children[i];
-                if (headerTags.indexOf(child.nodeName) >= 0) {
+                if (HEADER_TAGS.indexOf(child.nodeName) >= 0) {
                     var item = processHeader(child);
                     if (item) {
                         listElements.push(item);
@@ -112,7 +113,7 @@
         };
 
         return {
-            generateEntries: generateList
+            generateEntries: generateEntries
         };
     })();
 
@@ -137,16 +138,16 @@
     var output = (function () {
         var textAreaId = 'toc-result';
 
-        var createTextArea = function (list) {
+        var createTextArea = function () {
             var textArea = document.createElement('textarea');
-            textArea.value = list.join('\n');
             textArea.style.width = '100%';
             textArea.style.height = '100%';
             textArea.id = textAreaId;
             return textArea;
         };
 
-        var updateTextArea = function (textArea, list) {
+        var updateTextArea = function (textArea, entries, listType) {
+            var list = assembleList(entries, listType);
             textArea.value = list.join('\n');
         };
 
@@ -172,6 +173,22 @@
             return button;
         };
 
+        var createListOption = function (newDiv, entries, listType, description) {
+            var radio = document.createElement('input');
+            radio.setAttribute('type', 'radio');
+            radio.setAttribute('name', 'toclisttype');
+            radio.onclick = function () {
+                var textArea = document.getElementById(textAreaId);
+                updateTextArea(textArea, entries, listType);
+            };
+            if (listType === LIST_TYPE.unordered) {
+                radio.setAttribute('checked', 'checked');
+            }
+            newDiv.appendChild(radio);
+            var text = document.createTextNode(' ' + description + ' ');
+            newDiv.appendChild(text);
+        };
+
         var addStyleToDiv = function (newDiv) {
             newDiv.style.position = 'fixed';
             newDiv.style.top = '0';
@@ -183,19 +200,34 @@
             newDiv.style.padding = '40px';
         };
 
+        var addSpace = function (newDiv) {
+            newDiv.appendChild(document.createTextNode(' '));
+        };
+
+        /* Creates all HTML elements to display the table of contents and its options. */
+        var createElements = function (entries, listType) {
+            var newDiv = document.createElement('div');
+            var textArea = createTextArea();
+            updateTextArea(textArea, entries, listType);
+            newDiv.appendChild(textArea);
+            newDiv.appendChild(createCloseButton(newDiv));
+            addSpace(newDiv);
+            newDiv.appendChild(createCopyButton(textArea));
+            addSpace(newDiv);
+            createListOption(newDiv, entries, LIST_TYPE.unordered, 'unordered');
+            createListOption(newDiv, entries, LIST_TYPE.ordered, 'ordered');
+            createListOption(newDiv, entries, LIST_TYPE.firstLevelNumbered, 'first level numbered');
+            addStyleToDiv(newDiv);
+            document.body.appendChild(newDiv);
+        };
+
         return {
-            generate: function (list) {
+            display: function (entries, listType) {
                 var resultTextArea = document.getElementById(textAreaId);
                 if (resultTextArea) {
-                    updateTextArea(resultTextArea, list);
+                    updateTextArea(resultTextArea, entries, listType);
                 } else {
-                    var newDiv = document.createElement('div');
-                    var textArea = createTextArea(list);
-                    newDiv.appendChild(textArea);
-                    newDiv.appendChild(createCloseButton(newDiv));
-                    newDiv.appendChild(createCopyButton(textArea));
-                    addStyleToDiv(newDiv);
-                    document.body.appendChild(newDiv);
+                    createElements(entries, listType);
                 }
             }
         };
@@ -205,12 +237,7 @@
     // Execution
     // -----------
     var parent = getParentElement();
-    var list;
-    if (parent) {
-        var entries = extractor.generateEntries(parent);
-        list = assembleList(entries, listType.unordered);
-    } else {
-        list = ['Error: could not detect any markdown document!'];
-    }
-    output.generate(list);
+    var entries = parent ? extractor.generateEntries(parent) :
+        [new Entry('', 'Error: could not find any markdown document!', 0)];
+    output.display(entries, LIST_TYPE.unordered);
 })();
