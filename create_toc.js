@@ -4,32 +4,59 @@
 (function () {
     'use strict';
 
-    /** @var string[] the elements that define titles. */
+    /** @var {string[]} the elements that define titles. */
     var headerTags = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
 
     var firstOrNull = function (arr) {
         return arr ? arr[0] : null;
     };
 
+    /**
+     * Returns the parent element that contains the markdown page.
+     *
+     * @return {HTMLElement} the parent element
+     */
     var getParentElement = function () {
-        var article = firstOrNull(document.getElementById('readme').getElementsByTagName('article'));
-        return article;
+        // When viewing a markdown page on the repository (or the repository overview with the README)
+        // the markdown document is wrapped in <div id="readme"><article> document here </article></div>
+        var divContainer = document.getElementById('readme');
+        if (divContainer) {
+            return firstOrNull(divContainer.getElementsByTagName('article'));
+        }
+        // When viewing a Wiki page, the markdown document is wrapped in two div's:
+        // <div id="wiki-body"><div> document here </div></div>
+        divContainer = document.getElementById('wiki-body');
+        return divContainer ? firstOrNull(divContainer.getElementsByTagName('div')) : null;
     };
 
+    /**
+     * Processes the given header element and returns the corresponding Markdown for the table of contents.
+     *
+     * @param {HTMLElement} tag the element to process
+     * @returns {?string} markdown entry for the tag or null if not applicable
+     */
     var processHeader = function (tag) {
         var anchor = firstOrNull(tag.getElementsByTagName('a'));
         if (anchor && anchor.classList.contains('anchor')) {
             var href = anchor.getAttribute('href');
             var indent = parseInt(tag.nodeName.substr(1), 10);
-            return '  '.repeat(indent) + '- [' + tag.textContent + '](' + href + ')';
+            return '  '.repeat(indent - 1) + '- [' + tag.textContent.trim() + '](' + href + ')';
         }
         return null;
     };
 
-    var generateList = function (article) {
+
+
+    /**
+     * Generates the list of contents based on the children of the given parent tag.
+     *
+     * @param {HTMLElement} parent the parent element of the markdown document
+     * @returns {string[]} list with all lines of the table of contents
+     */
+    var generateList = function (parent) {
         var listElements = [];
-        for (var i = 0; i < article.children.length; i += 1) {
-            var child = article.children[i];
+        for (var i = 0; i < parent.children.length; i += 1) {
+            var child = parent.children[i];
             if (headerTags.indexOf(child.nodeName) >= 0) {
                 var item = processHeader(child);
                 if (item) {
@@ -40,6 +67,7 @@
         return listElements;
     };
 
+    /** Outputs the list. */
     var output = (function () {
         var textAreaId = 'toc-result';
 
@@ -111,6 +139,6 @@
     // Execution
     // -----------
     var parent = getParentElement();
-    var list = generateList(parent);
+    var list = parent ? generateList(parent) : ['Error: could not detect a markdown document!'];
     output.generate(list);
 })();
