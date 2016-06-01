@@ -1,0 +1,12 @@
+{
+  "browser": true,
+  "jquery": true,
+  "maxdepth": 3,
+  "maxcomplexity": 10,
+  "undef": true,
+  "unused": true,
+
+  "maxlen": 120,
+  "noempty": true,
+  "quotmark": "single"
+}
