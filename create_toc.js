@@ -29,23 +29,74 @@
         return divContainer ? firstOrNull(divContainer.getElementsByTagName('div')) : null;
     };
 
+    /* Entry class with the necessary information to create an entry in the table of contents. */
+    var Entry = function (href, text, indentation) {
+        this.href = href;
+        this.text = text;
+        this.indentation = indentation;
+    };
+
     /**
      * Processes the given header element and returns the corresponding Markdown for the table of contents.
      *
      * @param {HTMLElement} tag the element to process
-     * @returns {?string} markdown entry for the tag or null if not applicable
+     * @returns {?Entry} markdown entry for the tag or null if not applicable
      */
     var processHeader = function (tag) {
         var anchor = firstOrNull(tag.getElementsByTagName('a'));
         if (anchor && anchor.classList.contains('anchor')) {
-            var href = anchor.getAttribute('href');
-            var indent = parseInt(tag.nodeName.substr(1), 10);
-            return '  '.repeat(indent - 1) + '- [' + tag.textContent.trim() + '](' + href + ')';
+            return new Entry(
+                anchor.getAttribute('href'),
+                tag.textContent.trim(),
+                parseInt(tag.nodeName.substr(1), 10) - 1);
         }
         return null;
     };
 
+    /**
+     * Returns a list of indentation levels from old to new. As the indentation is initially inferred from the
+     * tag element (e.g. H4 tag -> 4th largest indentation) we may produce gaps if the document has gaps in the
+     * heading tags it uses.
+     *
+     * @param {Entry[]} entryList list of parsed entries
+     * @returns {Object} list with mappings from old indentation level to new
+     */
+    var normalizeIndentation = function (entryList) {
+        // List of possible indentation levels and value indicating whether the indentation level is present
+        var indentations = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false };
+        for (var i = 0; i < entryList.length; ++i) {
+            indentations[entryList[i].indentation] = true;
+        }
+        // List with indentation levels and what they map to. E.g. if we only found indentations of 1, 2, 4 and 6,
+        // they will map to actually be 0, 1, 2, 3...
+        var normalizedIndentation = {};
+        var indentationCounter = 0;
+        for (var j = 0; j <= 5; ++j) {
+            if (indentations[j]) {
+                normalizedIndentation[j] = indentationCounter;
+                ++indentationCounter;
+            }
+        }
+        return normalizedIndentation;
+    };
 
+    /**
+     * Creates text entries for the given list of entry objects.
+     *
+     * @param {Entry[]} entryList list of entries
+     * @returns {string[]} string list corresponding to the given entries
+     */
+    var assembleList = function (entryList) {
+        var normalizedIndentation = normalizeIndentation(entryList);
+        // Create the lines of the table using the normalized indentation
+        var lines = [];
+        for (var k = 0; k < entryList.length; ++k) {
+            var entry = entryList[k];
+            var indentation = normalizedIndentation[entry.indentation];
+            lines.push('  '.repeat(indentation) + '- [' + entry.text + '](' + entry.href + ')');
+        }
+        return lines;
+    };
 
     /**
      * Generates the list of contents based on the children of the given parent tag.
@@ -55,7 +106,7 @@
      */
     var generateList = function (parent) {
         var listElements = [];
-        for (var i = 0; i < parent.children.length; i += 1) {
+        for (var i = 0; i < parent.children.length; ++i) {
             var child = parent.children[i];
             if (headerTags.indexOf(child.nodeName) >= 0) {
                 var item = processHeader(child);
@@ -64,7 +115,7 @@
                 }
             }
         }
-        return listElements;
+        return assembleList(listElements);
     };
 
     /** Outputs the list. */
