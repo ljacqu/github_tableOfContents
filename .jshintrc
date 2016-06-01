@@ -1,6 +1,5 @@
 {
   "browser": true,
-  "jquery": true,
   "maxdepth": 3,
   "maxcomplexity": 10,
   "undef": true,

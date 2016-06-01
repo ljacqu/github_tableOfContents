@@ -41,12 +41,19 @@
     };
 
     var output = (function () {
+        var textAreaId = 'toc-result';
+
         var createTextArea = function (list) {
             var textArea = document.createElement('textarea');
             textArea.value = list.join('\n');
             textArea.style.width = '100%';
             textArea.style.height = '100%';
+            textArea.id = textAreaId;
             return textArea;
+        };
+
+        var updateTextArea = function (textArea, list) {
+            textArea.value = list.join('\n');
         };
 
         var createCloseButton = function (newDiv) {
@@ -56,10 +63,26 @@
             return button;
         };
 
+        var createCopyButton = function (textArea) {
+            var button = document.createElement('button');
+            button.textContent = 'Copy';
+            button.onclick = function () {
+                try {
+                    textArea.select();
+                    document.execCommand('copy');
+                    textArea.blur();
+                } catch (err) {
+                    textArea.style.borderColor = '#900';
+                }
+            };
+            return button;
+        };
+
         var addStyleToDiv = function (newDiv) {
             newDiv.style.position = 'fixed';
             newDiv.style.top = '0';
             newDiv.style.left = '0';
+            newDiv.style.zIndex = '5';
             newDiv.style.backgroundColor = '#eee';
             newDiv.style.width = '100%';
             newDiv.style.height = '100%';
@@ -68,11 +91,18 @@
 
         return {
             generate: function (list) {
-                var newDiv = document.createElement('div');
-                newDiv.appendChild(createTextArea(list));
-                newDiv.appendChild(createCloseButton(newDiv));
-                addStyleToDiv(newDiv);
-                document.body.appendChild(newDiv);
+                var resultTextArea = document.getElementById(textAreaId);
+                if (resultTextArea) {
+                    updateTextArea(resultTextArea, list);
+                } else {
+                    var newDiv = document.createElement('div');
+                    var textArea = createTextArea(list);
+                    newDiv.appendChild(textArea);
+                    newDiv.appendChild(createCloseButton(newDiv));
+                    newDiv.appendChild(createCopyButton(textArea));
+                    addStyleToDiv(newDiv);
+                    document.body.appendChild(newDiv);
+                }
             }
         };
     })();
