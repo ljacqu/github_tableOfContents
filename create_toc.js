@@ -7,6 +7,19 @@
     /** @var {string[]} the elements that define titles. */
     var headerTags = ['H1', 'H2', 'H3', 'H4', 'H5', 'H6'];
 
+    var listType = {
+        unordered: function () { return '-'; },
+        ordered: function () { return '1.'; },
+        firstLevelNumbered: function (entry) { return entry.indentation === 0 ? '1.' : '-'; }
+    };
+
+    /* Entry class with the necessary information to create an entry in the table of contents. */
+    var Entry = function (href, text, indentation) {
+        this.href = href;
+        this.text = text;
+        this.indentation = indentation;
+    };
+
     var firstOrNull = function (arr) {
         return arr ? arr[0] : null;
     };
@@ -14,7 +27,7 @@
     /**
      * Returns the parent element that contains the markdown page.
      *
-     * @return {HTMLElement} the parent element
+     * @returns {HTMLElement} the parent element
      */
     var getParentElement = function () {
         // When viewing a markdown page on the repository (or the repository overview with the README)
@@ -29,93 +42,95 @@
         return divContainer ? firstOrNull(divContainer.getElementsByTagName('div')) : null;
     };
 
-    /* Entry class with the necessary information to create an entry in the table of contents. */
-    var Entry = function (href, text, indentation) {
-        this.href = href;
-        this.text = text;
-        this.indentation = indentation;
-    };
-
-    /**
-     * Processes the given header element and returns the corresponding Markdown for the table of contents.
-     *
-     * @param {HTMLElement} tag the element to process
-     * @returns {?Entry} markdown entry for the tag or null if not applicable
-     */
-    var processHeader = function (tag) {
-        var anchor = firstOrNull(tag.getElementsByTagName('a'));
-        if (anchor && anchor.classList.contains('anchor')) {
-            return new Entry(
-                anchor.getAttribute('href'),
-                tag.textContent.trim(),
-                parseInt(tag.nodeName.substr(1), 10) - 1);
-        }
-        return null;
-    };
-
-    /**
-     * Returns a list of indentation levels from old to new. As the indentation is initially inferred from the
-     * tag element (e.g. H4 tag -> 4th largest indentation) we may produce gaps if the document has gaps in the
-     * heading tags it uses.
-     *
-     * @param {Entry[]} entryList list of parsed entries
-     * @returns {Object} list with mappings from old indentation level to new
-     */
-    var normalizeIndentation = function (entryList) {
-        // List of possible indentation levels and value indicating whether the indentation level is present
-        var indentations = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false };
-        for (var i = 0; i < entryList.length; ++i) {
-            indentations[entryList[i].indentation] = true;
-        }
-        // List with indentation levels and what they map to. E.g. if we only found indentations of 1, 2, 4 and 6,
-        // they will map to actually be 0, 1, 2, 3...
-        var normalizedIndentation = {};
-        var indentationCounter = 0;
-        for (var j = 0; j <= 5; ++j) {
-            if (indentations[j]) {
-                normalizedIndentation[j] = indentationCounter;
-                ++indentationCounter;
+    /** Creates Entry objects for the table of contents. */
+    var extractor = (function () {
+        /**
+         * Processes the given header element and returns the corresponding Markdown for the table of contents.
+         *
+         * @param {HTMLElement} tag the element to process
+         * @returns {?Entry} markdown entry for the tag or null if not applicable
+         */
+        var processHeader = function (tag) {
+            var anchor = firstOrNull(tag.getElementsByTagName('a'));
+            if (anchor && anchor.classList.contains('anchor')) {
+                return new Entry(
+                    anchor.getAttribute('href'),
+                    tag.textContent.trim(),
+                    parseInt(tag.nodeName.substr(1), 10) - 1);
             }
-        }
-        return normalizedIndentation;
-    };
+            return null;
+        };
+
+        /**
+         * Normalizes the indentation of all entries to ensure that there are no gaps, e.g. if a document only
+         * uses h2, h4 and h6.
+         *
+         * @param {Entry[]} entryList list of entries to normalize
+         */
+        var normalizeIndentation = function (entryList) {
+            // List of possible indentation levels and value indicating whether the indentation level is present
+            var indentations = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false };
+            for (var i = 0; i < entryList.length; ++i) {
+                indentations[entryList[i].indentation] = true;
+            }
+            // List with indentation levels and what they map to. E.g. if we only found indentations of 1, 2, 4 and 6,
+            // they will map to actually be 0, 1, 2, 3...
+            var normalizedIndentation = {};
+            var indentationCounter = 0;
+            for (var j = 0; j <= 5; ++j) {
+                if (indentations[j]) {
+                    normalizedIndentation[j] = indentationCounter;
+                    ++indentationCounter;
+                }
+            }
+            // Change the indentation of the entries to the normalized ones
+            for (var k = 0; k < entryList.length; ++k) {
+                var entry = entryList[k];
+                entry.indentation = normalizedIndentation[entry.indentation];
+            }
+        };
+
+        /**
+         * Generates the list of contents based on the children of the given parent tag.
+         *
+         * @param {HTMLElement} parent the parent element of the markdown document
+         * @returns {Entry[]} list with all lines of the table of contents
+         */
+        var generateList = function (parent) {
+            var listElements = [];
+            for (var i = 0; i < parent.children.length; ++i) {
+                var child = parent.children[i];
+                if (headerTags.indexOf(child.nodeName) >= 0) {
+                    var item = processHeader(child);
+                    if (item) {
+                        listElements.push(item);
+                    }
+                }
+            }
+            normalizeIndentation(listElements);
+            return listElements;
+        };
+
+        return {
+            generateEntries: generateList
+        };
+    })();
 
     /**
      * Creates text entries for the given list of entry objects.
      *
      * @param {Entry[]} entryList list of entries
+     * @param {Function} listType function returning bullet type (takes Entry as argument)
      * @returns {string[]} string list corresponding to the given entries
      */
-    var assembleList = function (entryList) {
-        var normalizedIndentation = normalizeIndentation(entryList);
-        // Create the lines of the table using the normalized indentation
+    var assembleList = function (entryList, listType) {
         var lines = [];
         for (var k = 0; k < entryList.length; ++k) {
             var entry = entryList[k];
-            var indentation = normalizedIndentation[entry.indentation];
-            lines.push('  '.repeat(indentation) + '- [' + entry.text + '](' + entry.href + ')');
+            var bullet = listType(entry);
+            lines.push('  '.repeat(entry.indentation) + bullet + ' [' + entry.text + '](' + entry.href + ')');
         }
         return lines;
-    };
-
-    /**
-     * Generates the list of contents based on the children of the given parent tag.
-     *
-     * @param {HTMLElement} parent the parent element of the markdown document
-     * @returns {string[]} list with all lines of the table of contents
-     */
-    var generateList = function (parent) {
-        var listElements = [];
-        for (var i = 0; i < parent.children.length; ++i) {
-            var child = parent.children[i];
-            if (headerTags.indexOf(child.nodeName) >= 0) {
-                var item = processHeader(child);
-                if (item) {
-                    listElements.push(item);
-                }
-            }
-        }
-        return assembleList(listElements);
     };
 
     /** Outputs the list. */
@@ -190,6 +205,12 @@
     // Execution
     // -----------
     var parent = getParentElement();
-    var list = parent ? generateList(parent) : ['Error: could not detect a markdown document!'];
+    var list;
+    if (parent) {
+        var entries = extractor.generateEntries(parent);
+        list = assembleList(entries, listType.unordered);
+    } else {
+        list = ['Error: could not detect any markdown document!'];
+    }
     output.generate(list);
 })();
