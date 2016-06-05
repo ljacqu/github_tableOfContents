@@ -153,6 +153,32 @@
             return lines;
         };
 
+        /* Returns if "skip top-level titles" option should be shown; do not show if we only have top-level entries. */
+        var showSkipTopLevelTitlesOption = function () {
+            if (entries.length <= 1) {
+                return false;
+            }
+            for (var i = 0; i < entries.length; ++i) {
+                if (entries[i].indentation !== 0) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        /* Returns if only the first entry of the table has indentation = 0. */
+        var isOnlyFirstEntryTopLevel = function () {
+            if (entries.length <= 1 || entries[0].indentation !== 0) {
+                return false;
+            }
+            for (var i = 1; i < entries.length; ++i) {
+                if (entries[i].indentation === 0) {
+                    return false;
+                }
+            }
+            return true;
+        };
+
         var createTextArea = function () {
             var textArea = document.createElement('textarea');
             textArea.style.width = '100%';
@@ -204,17 +230,23 @@
             newDiv.appendChild(text);
         };
 
+        /* Create "skip top-level titles" checkbox if applicable. */
         var createSkipTopLevelTitlesCheckbox = function (newDiv) {
-            var checkbox = document.createElement('input');
-            checkbox.setAttribute('type', 'checkbox');
-            checkbox.setAttribute('name', 'skiptoplevel');
-            checkbox.onchange = function () {
-                currentOptions.skipTopLevelTitles = this.checked;
-                updateTextArea();
-            };
-            newDiv.appendChild(checkbox);
-            var text = document.createTextNode(' Exclude top-level titles');
-            newDiv.appendChild(text);
+            if (currentOptions.skipTopLevelTitles || showSkipTopLevelTitlesOption()) {
+                var checkbox = document.createElement('input');
+                checkbox.setAttribute('type', 'checkbox');
+                checkbox.setAttribute('name', 'skiptoplevel');
+                if (currentOptions.skipTopLevelTitles) {
+                    checkbox.setAttribute('checked', 'checked');
+                }
+                checkbox.onchange = function () {
+                    currentOptions.skipTopLevelTitles = this.checked;
+                    updateTextArea();
+                };
+                newDiv.appendChild(checkbox);
+                var text = document.createTextNode(' Exclude top-level titles');
+                newDiv.appendChild(text);
+            }
         };
 
         var addStyleToDiv = function (newDiv) {
@@ -234,6 +266,7 @@
 
         /* Creates all HTML elements to display the table of contents and its options. */
         var createElements = function () {
+            currentOptions.skipTopLevelTitles = isOnlyFirstEntryTopLevel();
             var newDiv = document.createElement('div');
             textArea = createTextArea();
             updateTextArea();
