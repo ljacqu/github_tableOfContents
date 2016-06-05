@@ -11,7 +11,7 @@
     var LIST_TYPE = {
         unordered: function () { return '-'; },
         ordered: function () { return '1.'; },
-        firstLevelNumbered: function (entry) { return entry.indentation === 0 ? '1.' : '-'; }
+        firstLevelNumbered: function (indentation) { return indentation === 0 ? '1.' : '-'; }
     };
 
     /* Entry class with the necessary information to create an entry in the table of contents. */
@@ -19,11 +19,6 @@
         this.href = href;
         this.text = text;
         this.indentation = indentation;
-    };
-
-    /* List rendering options. */
-    var Options = function (listType) {
-        this.listType = listType;
     };
 
     /**
@@ -126,28 +121,37 @@
         };
     })();
 
-    /**
-     * Creates text entries for the given list of entry objects.
-     *
-     * @param {Options} options the list rendering options
-     * @returns {string[]} string list corresponding to the given entries
-     */
-    var assembleList = function (options) {
-        var lines = [];
-        for (var k = 0; k < entries.length; ++k) {
-            var entry = entries[k];
-            var bullet = options.listType(entry);
-            lines.push('  '.repeat(entry.indentation) + bullet + ' [' + entry.text + '](' + entry.href + ')');
-        }
-        return lines;
-    };
-
     /** Outputs the list. */
     var output = (function () {
         /** @var {HTMLInputElement} the rendered textarea element. */
         var textArea;
-        /** @var {Options} the current list options. */
-        var currentOptions;
+        /** @var {Object} the current list options. */
+        var currentOptions = {
+            listType: LIST_TYPE.unordered,
+            skipTopLevelTitles: false
+        };
+
+        /**
+         * Creates text entries for the given list of entry objects.
+         *
+         * @param {Object} options the list rendering options
+         * @returns {string[]} string list corresponding to the given entries
+         */
+        var assembleList = function (options) {
+            var lines = [];
+            var indentAdjustment = options.skipTopLevelTitles ? -1 : 0;
+            for (var k = 0; k < entries.length; ++k) {
+                var entry = entries[k];
+                if (options.skipTopLevelTitles && entry.indentation === 0) {
+                    continue;
+                }
+
+                var indent = entry.indentation + indentAdjustment;
+                var bullet = options.listType(indent);
+                lines.push('  '.repeat(indent) + bullet + ' [' + entry.text + '](' + entry.href + ')');
+            }
+            return lines;
+        };
 
         var createTextArea = function () {
             var textArea = document.createElement('textarea');
@@ -200,6 +204,19 @@
             newDiv.appendChild(text);
         };
 
+        var createSkipTopLevelTitlesCheckbox = function (newDiv) {
+            var checkbox = document.createElement('input');
+            checkbox.setAttribute('type', 'checkbox');
+            checkbox.setAttribute('name', 'skiptoplevel');
+            checkbox.onchange = function () {
+                currentOptions.skipTopLevelTitles = this.checked;
+                updateTextArea();
+            };
+            newDiv.appendChild(checkbox);
+            var text = document.createTextNode(' Exclude top-level titles');
+            newDiv.appendChild(text);
+        };
+
         var addStyleToDiv = function (newDiv) {
             newDiv.style.position = 'fixed';
             newDiv.style.top = '0';
@@ -217,7 +234,6 @@
 
         /* Creates all HTML elements to display the table of contents and its options. */
         var createElements = function () {
-            currentOptions = new Options(LIST_TYPE.unordered);
             var newDiv = document.createElement('div');
             textArea = createTextArea();
             updateTextArea();
@@ -229,6 +245,7 @@
             createListOption(newDiv, LIST_TYPE.unordered, 'unordered');
             createListOption(newDiv, LIST_TYPE.ordered, 'ordered');
             createListOption(newDiv, LIST_TYPE.firstLevelNumbered, 'first level numbered');
+            createSkipTopLevelTitlesCheckbox(newDiv);
             addStyleToDiv(newDiv);
             document.body.appendChild(newDiv);
         };
