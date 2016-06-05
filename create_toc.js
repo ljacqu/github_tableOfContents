@@ -88,7 +88,7 @@
          */
         var normalizeIndentation = function (entryList) {
             // List of possible indentation levels and value indicating whether the indentation level is present
-            var indentations = { 0: false, 1: false, 2: false, 3: false, 4: false, 5: false };
+            var indentations = { };
             for (var i = 0; i < entryList.length; ++i) {
                 indentations[entryList[i].i] = true;
             }
